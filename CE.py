@@ -41,6 +41,15 @@ def mutate(df, mutation_rate=0.1):
             new_df.at[i, 'TimeSlot'] = random.choice(timeslots)
     return new_df
 
+def parse_time(time_str):
+    """Convert time string like '08:00' to an integer hour (e.g., '08' -> 8)."""
+    try:
+        hour = int(time_str.split(":")[0])  # Extract the hour part
+        return hour
+    except Exception as e:
+        st.error(f"Error parsing time: {e} - Time string: {time_str}")
+        return None
+
 # --- 3. STREAMLIT UI ---
 st.title("📅 Study Schedule Optimizer (Evolutionary Algorithm)")
 st.write("Muat naik fail CSV anda untuk mengoptimumkan jadual tanpa clash.")
@@ -52,9 +61,20 @@ if uploaded_file:
     st.subheader("Data Asal (Input)")
     st.dataframe(df_origin, use_container_width=True)
 
-    # Mapping columns to match dataset format
-    df_origin['Day'] = df_origin['Day_Num'].map({1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'})
-    df_origin['TimeSlot'] = df_origin.apply(lambda row: f'{int(row["Start_Time"].split(":")[0])}-{int(row["End_Time"].split(":")[0])}', axis=1)
+    # --- Time Parsing ---
+    try:
+        # Map Day_Num to Day
+        df_origin['Day'] = df_origin['Day_Num'].map({1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'})
+
+        # Create TimeSlot based on Start_Time and End_Time
+        df_origin['Start_Hour'] = df_origin['Start_Time'].apply(parse_time)
+        df_origin['End_Hour'] = df_origin['End_Time'].apply(parse_time)
+        
+        # Create TimeSlot as a string: 'StartHour-EndHour'
+        df_origin['TimeSlot'] = df_origin.apply(lambda row: f'{row["Start_Hour"]}-{row["End_Hour"]}', axis=1)
+
+    except Exception as e:
+        st.error(f"Error processing time columns: {e}")
 
     # Parameter GA
     with st.sidebar:
