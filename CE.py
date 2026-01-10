@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import random
+import matplotlib.pyplot as plt
 
 # Algoritma Artificial Bee Colony (ABC)
 class Bee:
@@ -19,14 +20,15 @@ def calculate_fitness(schedule):
             fitness += 1  # Menilai jika tempoh tugas sesuai dengan slot masa
     return fitness
 
-def abc_algorithm(tasks, num_bees=10, max_iter=100):
+def abc_algorithm(tasks, num_bees=10, max_iter=100, mutation_rate=0.2):
     """
-    Fungsi utama untuk implementasi algoritma ABC.
+    Fungsi utama untuk implementasi algoritma ABC dengan mutasi.
     Algoritma ini mengoptimumkan jadual pelajar dengan mengurangkan konflik tugas.
     """
     bees = []
     best_schedule = None
     best_fitness = -float('inf')
+    fitness_progress = []  # Track fitness progress for plotting
 
     # Inisialisasi populasi dengan jadual rawak
     for _ in range(num_bees):
@@ -38,9 +40,13 @@ def abc_algorithm(tasks, num_bees=10, max_iter=100):
     for iteration in range(max_iter):
         for bee in bees:
             new_schedule = bee.schedule[:]
-            random_task = random.choice(new_schedule)
-            new_schedule.remove(random_task)
-            new_schedule.append({'task': random_task['task'], 'duration': random.randint(1, 3), 'time_slot': random.randint(1, 10)})
+            
+            # Mutation: Randomly change a task's time slot
+            if random.random() < mutation_rate:
+                random_task = random.choice(new_schedule)
+                new_schedule.remove(random_task)
+                new_schedule.append({'task': random_task['task'], 'duration': random.randint(1, 3), 'time_slot': random.randint(1, 10)})
+
             new_fitness = calculate_fitness(new_schedule)
             
             # Kemas kini jadual jika kecergasan bertambah
@@ -53,8 +59,10 @@ def abc_algorithm(tasks, num_bees=10, max_iter=100):
             if bee.fitness > best_fitness:
                 best_fitness = bee.fitness
                 best_schedule = bee.schedule
+        
+        fitness_progress.append(best_fitness)  # Track fitness over iterations
     
-    return best_schedule
+    return best_schedule, fitness_progress
 
 # Antaramuka pengguna Streamlit
 st.title('Study Schedule Optimization for University Students')
@@ -79,9 +87,17 @@ if uploaded_file is not None:
     # Paparkan butang untuk menjalankan algoritma pengoptimuman
     if st.button('Optimize Schedule'):
         # Jalankan algoritma ABC untuk mendapatkan jadual terbaik
-        optimized_schedule = abc_algorithm(tasks)
-        
+        optimized_schedule, fitness_progress = abc_algorithm(tasks)
+
         # Paparkan jadual yang telah dioptimumkan
         st.write("Optimized Schedule:")
         for task in optimized_schedule:
             st.write(f"Course ID: {task['task']}, Duration: {task['duration']}, Time Slot: {task['time_slot']}")
+
+        # Plot the fitness progression
+        st.subheader("Fitness Progression over Iterations")
+        plt.plot(fitness_progress)
+        plt.xlabel('Iterations')
+        plt.ylabel('Fitness')
+        plt.title('Fitness Progression in ABC Algorithm')
+        st.pyplot(plt)
