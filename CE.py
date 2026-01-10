@@ -68,8 +68,8 @@ if uploaded_file is not None:
     data.columns = data.columns.str.strip()  # Buang ruang atau karakter tersembunyi dalam nama kolum
     
     # Paparkan nama kolum untuk penyemakan
-    st.write(data.columns)  # Inspect the column names to debug any issues
-    
+    st.write("Column names in the CSV file:", data.columns)  # Display the column names to debug
+
     # Memproses data untuk menjadi senarai tugas
     try:
         tasks = [{'name': row['Task'], 'duration': row['Duration'], 'time_slot': row['Time Slot']} for _, row in data.iterrows()]
