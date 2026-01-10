@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import random
 import numpy as np
+import matplotlib.pyplot as plt
 
 # --- 1. CONFIGURATION & MOCK DATA ---
 st.set_page_config(page_title="University Schedule Optimizer", layout="wide")
@@ -95,6 +96,7 @@ if uploaded_file:
         
         best_schedule = None
         best_fitness = 0
+        fitness_progress = []  # Track fitness over generations
 
         # Evolutionary Loop
         for gen in range(generations):
@@ -121,6 +123,9 @@ if uploaded_file:
             progress = (gen + 1) / generations
             progress_bar.progress(progress)
             status_text.text(f"Generation {gen+1}/{generations} - Best Fitness: {best_fitness:.4f}")
+            
+            # Track fitness progression
+            fitness_progress.append(best_fitness)
 
         # --- 4. RESULTS ---
         st.success("Optimasi Selesai!")
@@ -134,6 +139,15 @@ if uploaded_file:
 
         st.subheader("Jadual Yang Dioptimumkan")
         st.dataframe(best_schedule.sort_values(by=['Student_ID', 'Day']), use_container_width=True)
+        
+        # --- Plot Fitness Progression Graph ---
+        st.subheader("Fitness Progression over Generations")
+        plt.plot(fitness_progress, label="Fitness")
+        plt.xlabel('Generations')
+        plt.ylabel('Fitness')
+        plt.title('Fitness Progression (Best Fitness)')
+        plt.legend()
+        st.pyplot(plt)
         
         # Download Button
         csv = best_schedule.to_csv(index=False).encode('utf-8')
