@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from abc_algorithm import abc_algorithm
+from abc_algorithm 
 
 # Fungsi untuk memuat naik data tugas dari fail CSV
 def load_task_data(file):
