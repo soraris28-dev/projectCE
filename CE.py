@@ -64,7 +64,11 @@ uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
 if uploaded_file is not None:
     data = pd.read_csv(uploaded_file)
     
+    # Bersihkan nama-nama kolum dengan .strip()
+    data.columns = data.columns.str.strip()  # Buang ruang atau karakter tersembunyi dalam nama kolum
+    
     # Memproses data untuk menjadi senarai tugas
+    st.write(data.columns)  # Inspect the column names to debug any issues
     tasks = [{'name': row['Task'], 'duration': row['Duration'], 'time_slot': row['Time Slot']} for _, row in data.iterrows()]
     
     # Paparkan butang untuk menjalankan algoritma pengoptimuman
