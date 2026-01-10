@@ -84,10 +84,20 @@ if uploaded_file is not None:
     except KeyError as e:
         st.error(f"KeyError: {e}. Please check the column names in your CSV file.")
     
+    # Tambahkan parameter input di Streamlit untuk mengubah nilai
+    num_bees = st.slider('Number of Bees', min_value=5, max_value=50, value=10, step=1)
+    max_iter = st.slider('Number of Iterations', min_value=10, max_value=200, value=100, step=1)
+    mutation_rate = st.slider('Mutation Rate', min_value=0.0, max_value=1.0, value=0.2, step=0.01)
+
+    # Paparkan parameter yang dipilih
+    st.write(f"Number of Bees: {num_bees}")
+    st.write(f"Number of Iterations: {max_iter}")
+    st.write(f"Mutation Rate: {mutation_rate}")
+
     # Paparkan butang untuk menjalankan algoritma pengoptimuman
     if st.button('Optimize Schedule'):
         # Jalankan algoritma ABC untuk mendapatkan jadual terbaik
-        optimized_schedule, fitness_progress = abc_algorithm(tasks)
+        optimized_schedule, fitness_progress = abc_algorithm(tasks, num_bees, max_iter, mutation_rate)
 
         # Paparkan jadual yang telah dioptimumkan
         st.write("Optimized Schedule:")
