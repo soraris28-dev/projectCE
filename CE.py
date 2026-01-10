@@ -41,13 +41,16 @@ def mutate(df, mutation_rate=0.1):
             new_df.at[i, 'TimeSlot'] = random.choice(timeslots)
     return new_df
 
-def parse_time(time_str):
-    """Convert time string like '08:00' to an integer hour (e.g., '08' -> 8)."""
+def parse_time(time_value):
+    """Convert time string or integer like '08:00' or 8 to an integer hour (e.g., '08' -> 8)."""
     try:
-        hour = int(time_str.split(":")[0])  # Extract the hour part
-        return hour
+        if isinstance(time_value, int):  # In case the time is in integer format
+            hour = f'{time_value:02d}'  # Convert to string with leading zero if needed
+        else:
+            hour = time_value.split(":")[0]  # Extract the hour part from time string
+        return int(hour)
     except Exception as e:
-        st.error(f"Error parsing time: {e} - Time string: {time_str}")
+        st.error(f"Error parsing time: {e} - Time value: {time_value}")
         return None
 
 # --- 3. STREAMLIT UI ---
