@@ -1,113 +1,117 @@
 import streamlit as st
 import pandas as pd
 import random
-import matplotlib.pyplot as plt
+import numpy as np
 
-# Algoritma Artificial Bee Colony (ABC)
-class Bee:
-    def __init__(self, schedule, fitness):
-        self.schedule = schedule  # Jadual yang dicadangkan
-        self.fitness = fitness    # Kecergasan jadual
+# --- 1. CONFIGURATION & MOCK DATA ---
+st.set_page_config(page_title="University Schedule Optimizer", layout="wide")
 
-def calculate_fitness(schedule):
+def load_data(file):
+    df = pd.read_csv(file)
+    return df
+
+# --- 2. GENETIC ALGORITHM FUNCTIONS ---
+def calculate_fitness(schedule_df):
     """
-    Fungsi untuk mengira kecergasan jadual.
-    Jadual dianggap lebih baik jika tugas-tugasnya sesuai dengan slot masa yang diberikan.
+    Mengira fitness berdasarkan 'Hard Constraint': 
+    Seorang pelajar tidak boleh ada 2 kelas pada hari dan waktu yang sama.
     """
-    fitness = 0
-    for task in schedule:
-        if task['duration'] <= task['time_slot']:
-            fitness += 1  # Menilai jika tempoh tugas sesuai dengan slot masa
-    return fitness
+    clashes = 0
+    # Kumpulan data mengikut Pelajar, Hari, dan Slot Masa
+    conflicts = schedule_df.groupby(['Student_ID', 'Day_Num', 'TimeSlot']).size()
+    clashes = (conflicts > 1).sum()
+    
+    # Fitness adalah 1 / (1 + jumlah clash). Target: 1.0 (0 clash)
+    return 1 / (1 + clashes)
 
-def abc_algorithm(tasks, num_bees=10, max_iter=100, mutation_rate=0.2):
-    """
-    Fungsi utama untuk implementasi algoritma ABC dengan mutasi.
-    Algoritma ini mengoptimumkan jadual pelajar dengan mengurangkan konflik tugas.
-    """
-    bees = []
-    best_schedule = None
-    best_fitness = -float('inf')
-    fitness_progress = []  # Track fitness progress for plotting
+def mutate(df, mutation_rate=0.1):
+    """Menukar slot masa secara rawak untuk mempelbagaikan genetik."""
+    
+    # TimeSlot (converted from Start_Time and End_Time)
+    timeslots = ['08-10', '09-11', '10-12', '11-13', '14-16', '16-18']
+    
+    # Day mapping based on Day_Num (1 = Monday, 5 = Friday)
+    day_mapping = {1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'}
+    
+    new_df = df.copy()
+    for i in range(len(new_df)):
+        if random.random() < mutation_rate:
+            # Mutate day and time slot
+            new_df.at[i, 'Day'] = random.choice(list(day_mapping.values()))
+            new_df.at[i, 'TimeSlot'] = random.choice(timeslots)
+    return new_df
 
-    # Inisialisasi populasi dengan jadual rawak
-    for _ in range(num_bees):
-        schedule = [{'task': task['course_id'], 'duration': task['duration'], 'time_slot': random.randint(1, 10)} for task in tasks]
-        fitness = calculate_fitness(schedule)
-        bees.append(Bee(schedule, fitness))
+# --- 3. STREAMLIT UI ---
+st.title("📅 Study Schedule Optimizer (Evolutionary Algorithm)")
+st.write("Muat naik fail CSV anda untuk mengoptimumkan jadual tanpa clash.")
 
-    # Gelung utama algoritma ABC
-    for iteration in range(max_iter):
-        for bee in bees:
-            new_schedule = bee.schedule[:]
-            
-            # Mutation: Randomly change a task's time slot
-            if random.random() < mutation_rate:
-                random_task = random.choice(new_schedule)
-                new_schedule.remove(random_task)
-                new_schedule.append({'task': random_task['task'], 'duration': random.randint(1, 3), 'time_slot': random.randint(1, 10)})
+uploaded_file = st.file_uploader("Upload student_schedule.csv", type="csv")
 
-            new_fitness = calculate_fitness(new_schedule)
-            
-            # Kemas kini jadual jika kecergasan bertambah
-            if new_fitness > bee.fitness:
-                bee.schedule = new_schedule
-                bee.fitness = new_fitness
+if uploaded_file:
+    df_origin = load_data(uploaded_file)
+    st.subheader("Data Asal (Input)")
+    st.dataframe(df_origin, use_container_width=True)
+
+    # Mapping columns to match dataset format
+    df_origin['Day'] = df_origin['Day_Num'].map({1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'})
+    df_origin['TimeSlot'] = df_origin.apply(lambda row: f'{int(row["Start_Time"].split(":")[0])}-{int(row["End_Time"].split(":")[0])}', axis=1)
+
+    # Parameter GA
+    with st.sidebar:
+        st.header("GA Parameters")
+        pop_size = st.slider("Population Size", 10, 100, 50)
+        generations = st.slider("Generations", 10, 200, 50)
+        mutation_rate = st.slider("Mutation Rate", 0.01, 0.5, 0.1)
+
+    if st.button("🚀 Run Optimization"):
+        # Initial Population (Copy of original with slight mutations)
+        population = [mutate(df_origin, mutation_rate=0.5) for _ in range(pop_size)]
         
-        # Semak jadual terbaik
-        for bee in bees:
-            if bee.fitness > best_fitness:
-                best_fitness = bee.fitness
-                best_schedule = bee.schedule
+        progress_bar = st.progress(0)
+        status_text = st.empty()
         
-        fitness_progress.append(best_fitness)  # Track fitness over iterations
-    
-    return best_schedule, fitness_progress
+        best_schedule = None
+        best_fitness = 0
 
-# Antaramuka pengguna Streamlit
-st.title('Study Schedule Optimization for University Students')
+        # Evolutionary Loop
+        for gen in range(generations):
+            # Evaluate fitness
+            population = sorted(population, key=lambda x: calculate_fitness(x), reverse=True)
+            current_best_fitness = calculate_fitness(population[0])
+            
+            if current_best_fitness > best_fitness:
+                best_fitness = current_best_fitness
+                best_schedule = population[0]
 
-# Muat naik fail CSV yang mengandungi data tugas
-uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
-if uploaded_file is not None:
-    data = pd.read_csv(uploaded_file)
-    
-    # Bersihkan nama-nama kolum dengan .strip() dan tukar huruf kecil untuk keserasian
-    data.columns = data.columns.str.strip().str.lower()  # Buang ruang dan tukar huruf kecil
-    
-    # Paparkan nama kolum untuk penyemakan
-    st.write("Column names in the CSV file:", data.columns)  # Display the column names to debug
+            # Selection & Crossover (Simple version: Keep top 50%)
+            next_gen = population[:pop_size // 2]
+            
+            # Fill the rest with mutated versions of the best
+            while len(next_gen) < pop_size:
+                parent = random.choice(next_gen)
+                child = mutate(parent, mutation_rate=mutation_rate)
+                next_gen.append(child)
+            
+            population = next_gen
+            
+            # Update UI
+            progress = (gen + 1) / generations
+            progress_bar.progress(progress)
+            status_text.text(f"Generation {gen+1}/{generations} - Best Fitness: {best_fitness:.4f}")
 
-    # Memproses data untuk menjadi senarai tugas
-    try:
-        tasks = [{'course_id': row['course_id'], 'duration': row['duration'], 'time_slot': row['start_time']} for _, row in data.iterrows()]
-    except KeyError as e:
-        st.error(f"KeyError: {e}. Please check the column names in your CSV file.")
-    
-    # Tambahkan parameter input di Streamlit untuk mengubah nilai
-    num_bees = st.slider('Number of Bees', min_value=5, max_value=50, value=10, step=1)
-    max_iter = st.slider('Number of Iterations', min_value=10, max_value=200, value=100, step=1)
-    mutation_rate = st.slider('Mutation Rate', min_value=0.0, max_value=1.0, value=0.2, step=0.01)
+        # --- 4. RESULTS ---
+        st.success("Optimasi Selesai!")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Final Fitness", f"{best_fitness:.4f}")
+        with col2:
+            clash_count = (1/best_fitness) - 1
+            st.metric("Total Clashes", int(clash_count))
 
-    # Paparkan parameter yang dipilih
-    st.write(f"Number of Bees: {num_bees}")
-    st.write(f"Number of Iterations: {max_iter}")
-    st.write(f"Mutation Rate: {mutation_rate}")
-
-    # Paparkan butang untuk menjalankan algoritma pengoptimuman
-    if st.button('Optimize Schedule'):
-        # Jalankan algoritma ABC untuk mendapatkan jadual terbaik
-        optimized_schedule, fitness_progress = abc_algorithm(tasks, num_bees, max_iter, mutation_rate)
-
-        # Paparkan jadual yang telah dioptimumkan
-        st.write("Optimized Schedule:")
-        for task in optimized_schedule:
-            st.write(f"Course ID: {task['task']}, Duration: {task['duration']}, Time Slot: {task['time_slot']}")
-
-        # Plot the fitness progression
-        st.subheader("Fitness Progression over Iterations")
-        plt.plot(fitness_progress)
-        plt.xlabel('Iterations')
-        plt.ylabel('Fitness')
-        plt.title('Fitness Progression in ABC Algorithm')
-        st.pyplot(plt)
+        st.subheader("Jadual Yang Dioptimumkan")
+        st.dataframe(best_schedule.sort_values(by=['Student_ID', 'Day']), use_container_width=True)
+        
+        # Download Button
+        csv = best_schedule.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Optimized Schedule", data=csv, file_name="optimized_schedule.csv", mime="text/csv")
