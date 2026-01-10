@@ -67,9 +67,14 @@ if uploaded_file is not None:
     # Bersihkan nama-nama kolum dengan .strip()
     data.columns = data.columns.str.strip()  # Buang ruang atau karakter tersembunyi dalam nama kolum
     
-    # Memproses data untuk menjadi senarai tugas
+    # Paparkan nama kolum untuk penyemakan
     st.write(data.columns)  # Inspect the column names to debug any issues
-    tasks = [{'name': row['Task'], 'duration': row['Duration'], 'time_slot': row['Time Slot']} for _, row in data.iterrows()]
+    
+    # Memproses data untuk menjadi senarai tugas
+    try:
+        tasks = [{'name': row['Task'], 'duration': row['Duration'], 'time_slot': row['Time Slot']} for _, row in data.iterrows()]
+    except KeyError as e:
+        st.error(f"KeyError: {e}. Please check the column names in your CSV file.")
     
     # Paparkan butang untuk menjalankan algoritma pengoptimuman
     if st.button('Optimize Schedule'):
