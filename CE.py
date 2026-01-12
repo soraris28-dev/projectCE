@@ -4,123 +4,117 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="University Schedule Optimizer", layout="wide")
+st.set_page_config(page_title="University Schedule Optimizer (ABC)", layout="wide")
 
 def load_data(file):
-    df = pd.read_csv(file)
-    return df
+    return pd.read_csv(file)
 
 def calculate_fitness(schedule_df):
-
-    clashes = 0
+    # Fitness = 1 / (1 + jumlah pertindihan)
     conflicts = schedule_df.groupby(['Student_ID', 'Day_Num', 'TimeSlot']).size()
     clashes = (conflicts > 1).sum()
-    
     return 1 / (1 + clashes)
 
-def mutate(df, mutation_rate=0.1):
-    
+def get_neighbor(df, mutation_rate=0.2):
+    # Lebah mencari sumber makanan berhampiran (Neighbor Search)
     timeslots = ['08-10', '09-11', '10-12', '11-13', '14-16', '16-18']
-    
     day_mapping = {1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'}
     
     new_df = df.copy()
     for i in range(len(new_df)):
         if random.random() < mutation_rate:
-            new_df.at[i, 'Day'] = random.choice(list(day_mapping.values()))
+            new_df.at[i, 'Day_Num'] = random.choice(list(day_mapping.keys()))
             new_df.at[i, 'TimeSlot'] = random.choice(timeslots)
     return new_df
 
-def parse_time(time_value):
-    try:
-        if isinstance(time_value, int):  
-            hour = f'{time_value:02d}'  
-        else:
-            hour = time_value.split(":")[0] 
-        return int(hour)
-    except Exception as e:
-        st.error(f"Error parsing time: {e} - Time value: {time_value}")
-        return None
+st.title("🐝 Study Schedule Optimizer (Artificial Bee Colony)")
+st.write("Menggunakan algoritma lebah untuk mencari jadual tanpa 'clash'.")
 
-st.title("📅 Study Schedule Optimizer (Evolutionary Algorithm)")
-st.write("Upload your CSV file to optimize schedules without clashes")
-
-uploaded_file = st.file_uploader("Upload student_schedule.csv", type="csv")
+uploaded_file = st.file_uploader("Upload student_schedule_cleaned.csv", type="csv")
 
 if uploaded_file:
     df_origin = load_data(uploaded_file)
-    st.subheader("Data Asal (Input)")
-    st.dataframe(df_origin, use_container_width=True)
-
-    try:
-        df_origin['Day'] = df_origin['Day_Num'].map({1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'})
-
-        df_origin['Start_Hour'] = df_origin['Start_Time'].apply(parse_time)
-        df_origin['End_Hour'] = df_origin['End_Time'].apply(parse_time)
-        
-        df_origin['TimeSlot'] = df_origin.apply(lambda row: f'{row["Start_Hour"]}-{row["End_Hour"]}', axis=1)
-
-    except Exception as e:
-        st.error(f"Error processing time columns: {e}")
+    
+    # Pre-processing untuk TimeSlot jika belum ada
+    if 'TimeSlot' not in df_origin.columns:
+        df_origin['TimeSlot'] = df_origin.apply(lambda row: f"{int(row['Start_Time'])}-{int(row['End_Time'])}", axis=1)
 
     with st.sidebar:
-        st.header("GA Parameters")
-        pop_size = st.slider("Population Size", 10, 100, 50)
-        generations = st.slider("Generations", 10, 200, 50)
-        mutation_rate = st.slider("Mutation Rate", 0.01, 0.5, 0.1)
+        st.header("ABC Parameters")
+        n_food_sources = st.slider("Number of Food Sources (Population)", 10, 100, 30)
+        max_iter = st.slider("Max Iterations", 10, 200, 50)
+        limit = st.slider("Abandonment Limit (Scout Bee Threshold)", 5, 50, 10)
 
-    if st.button("🚀 Run Optimization"):
-        population = [mutate(df_origin, mutation_rate=0.5) for _ in range(pop_size)]
+    if st.button("🐝 Mulakan Pencarian Nektar"):
+        # 1. Initialization: Lebah mencari sumber makanan awal
+        food_sources = [get_neighbor(df_origin, mutation_rate=0.5) for _ in range(n_food_sources)]
+        fitness_values = [calculate_fitness(fs) for fs in food_sources]
+        trial_counters = [0] * n_food_sources # Untuk Scout Bee
         
+        best_fitness = max(fitness_values)
+        best_schedule = food_sources[fitness_values.index(best_fitness)]
+        history = []
+
         progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        best_schedule = None
-        best_fitness = 0
-        fitness_progress = []  
 
-        for gen in range(generations):
-            population = sorted(population, key=lambda x: calculate_fitness(x), reverse=True)
-            current_best_fitness = calculate_fitness(population[0])
-            
-            if current_best_fitness > best_fitness:
-                best_fitness = current_best_fitness
-                best_schedule = population[0]
+        for iteration in range(max_iter):
+            # --- PHASE 1: Employed Bees (Lebah Pekerja) ---
+            for i in range(n_food_sources):
+                new_source = get_neighbor(food_sources[i])
+                new_fit = calculate_fitness(new_source)
+                
+                if new_fit > fitness_values[i]:
+                    food_sources[i] = new_source
+                    fitness_values[i] = new_fit
+                    trial_counters[i] = 0
+                else:
+                    trial_counters[i] += 1
 
-            next_gen = population[:pop_size // 2]
-            
-            while len(next_gen) < pop_size:
-                parent = random.choice(next_gen)
-                child = mutate(parent, mutation_rate=mutation_rate)
-                next_gen.append(child)
-            
-            population = next_gen
-            
-            progress = (gen + 1) / generations
-            progress_bar.progress(progress)
-            status_text.text(f"Generation {gen+1}/{generations} - Best Fitness: {best_fitness:.4f}")
-            
-            fitness_progress.append(best_fitness)
+            # --- PHASE 2: Onlooker Bees (Lebah Pemerhati) ---
+            # Memilih sumber makanan berdasarkan kualiti (Probability)
+            prob = [f/sum(fitness_values) for f in fitness_values]
+            for i in range(n_food_sources):
+                if random.random() < prob[i]:
+                    new_source = get_neighbor(food_sources[i])
+                    new_fit = calculate_fitness(new_source)
+                    if new_fit > fitness_values[i]:
+                        food_sources[i] = new_source
+                        fitness_values[i] = new_fit
+                        trial_counters[i] = 0
+                    else:
+                        trial_counters[i] += 1
 
-        st.success("Optimization done!")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Final Fitness", f"{best_fitness:.4f}")
-        with col2:
-            clash_count = (1/best_fitness) - 1
-            st.metric("Total Clashes", int(clash_count))
+            # --- PHASE 3: Scout Bees (Lebah Pengakap) ---
+            # Jika sumber makanan tidak bertambah baik, cari yang baru secara rawak
+            for i in range(n_food_sources):
+                if trial_counters[i] > limit:
+                    food_sources[i] = get_neighbor(df_origin, mutation_rate=0.8)
+                    fitness_values[i] = calculate_fitness(food_sources[i])
+                    trial_counters[i] = 0
 
-        st.subheader("optimized schedule")
-        st.dataframe(best_schedule.sort_values(by=['Student_ID', 'Day']), use_container_width=True)
+            # Simpan rekod terbaik
+            current_max = max(fitness_values)
+            if current_max > best_fitness:
+                best_fitness = current_max
+                best_schedule = food_sources[fitness_values.index(best_fitness)]
+            
+            history.append(best_fitness)
+            progress_bar.progress((iteration + 1) / max_iter)
+
+        st.success("Selesai! Lebah telah menemui jadual terbaik.")
         
-        st.subheader("Fitness Progression over Generations")
-        plt.plot(fitness_progress, label="Fitness")
-        plt.xlabel('Generations')
-        plt.ylabel('Fitness')
-        plt.title('Fitness Progression (Best Fitness)')
-        plt.legend()
-        st.pyplot(plt)
-        
-        csv = best_schedule.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Optimized Schedule", data=csv, file_name="optimized_schedule.csv", mime="text/csv")
+        # Paparan Result
+        c1, c2 = st.columns(2)
+        c1.metric("Kualiti Nektar (Fitness)", f"{best_fitness:.4f}")
+        c2.metric("Jumlah Clash", int((1/best_fitness)-1))
+
+        st.subheader("Jadual Optimum")
+        st.dataframe(best_schedule.sort_values(by=['Student_ID', 'Day_Num']), use_container_width=True)
+
+        # Graf
+        fig, ax = plt.subplots()
+        ax.plot(history, color='orange', linewidth=2)
+        ax.set_title("ABC Optimization Progress")
+        ax.set_xlabel("Iterations")
+        ax.set_ylabel("Best Fitness")
+        st.pyplot(fig)
