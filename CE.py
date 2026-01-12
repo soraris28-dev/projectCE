@@ -13,7 +13,6 @@ def load_data(file):
 def calculate_fitness(schedule_df):
 
     clashes = 0
-    # Kumpulan data mengikut Pelajar, Hari, dan Slot Masa
     conflicts = schedule_df.groupby(['Student_ID', 'Day_Num', 'TimeSlot']).size()
     clashes = (conflicts > 1).sum()
     
@@ -81,7 +80,7 @@ if uploaded_file:
         
         best_schedule = None
         best_fitness = 0
-        fitness_progress = []  # Track fitness over generations
+        fitness_progress = []  
 
         for gen in range(generations):
             # Evaluate fitness
