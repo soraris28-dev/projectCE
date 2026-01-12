@@ -72,10 +72,11 @@ def mutate(df, mutation_rate=0.1):
 def parse_time(time_value):
     """Convert time string or integer like '08:00' or 8 to an integer hour (e.g., '08' -> 8)."""
     try:
-        if isinstance(time_value, int):  # In case the time is in integer format
-            hour = f'{time_value:02d}'  # Convert to string with leading zero if needed
-        else:
-            hour = time_value.split(":")[0]  # Extract the hour part from time string
+        if isinstance(time_value, int):  # If the time is in integer format (e.g., 9)
+            time_value = f'{time_value:02d}:00'  # Convert to string (e.g., 9 -> '09:00')
+        
+        # Now, safely split time and extract the hour
+        hour = time_value.split(":")[0]  # Extract the hour part from time string (e.g., '08:00' -> 8)
         return int(hour)
     except Exception as e:
         st.error(f"Error parsing time: {e} - Time value: {time_value}")
