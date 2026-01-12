@@ -4,34 +4,25 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 1. CONFIGURATION & MOCK DATA ---
 st.set_page_config(page_title="University Schedule Optimizer", layout="wide")
 
 def load_data(file):
     df = pd.read_csv(file)
     return df
 
-# --- 2. GENETIC ALGORITHM FUNCTIONS ---
 def calculate_fitness(schedule_df):
-    """
-    Mengira fitness berdasarkan 'Hard Constraint': 
-    Seorang pelajar tidak boleh ada 2 kelas pada hari dan waktu yang sama.
-    """
+
     clashes = 0
     # Kumpulan data mengikut Pelajar, Hari, dan Slot Masa
     conflicts = schedule_df.groupby(['Student_ID', 'Day_Num', 'TimeSlot']).size()
     clashes = (conflicts > 1).sum()
     
-    # Fitness adalah 1 / (1 + jumlah clash). Target: 1.0 (0 clash)
     return 1 / (1 + clashes)
 
 def mutate(df, mutation_rate=0.1):
-    """Menukar slot masa secara rawak untuk mempelbagaikan genetik."""
     
-    # TimeSlot (converted from Start_Time and End_Time)
     timeslots = ['08-10', '09-11', '10-12', '11-13', '14-16', '16-18']
     
-    # Day mapping based on Day_Num (1 = Monday, 5 = Friday)
     day_mapping = {1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'}
     
     new_df = df.copy()
@@ -43,18 +34,16 @@ def mutate(df, mutation_rate=0.1):
     return new_df
 
 def parse_time(time_value):
-    """Convert time string or integer like '08:00' or 8 to an integer hour (e.g., '08' -> 8)."""
     try:
-        if isinstance(time_value, int):  # In case the time is in integer format
-            hour = f'{time_value:02d}'  # Convert to string with leading zero if needed
+        if isinstance(time_value, int):  
+            hour = f'{time_value:02d}'  
         else:
-            hour = time_value.split(":")[0]  # Extract the hour part from time string
+            hour = time_value.split(":")[0] 
         return int(hour)
     except Exception as e:
         st.error(f"Error parsing time: {e} - Time value: {time_value}")
         return None
 
-# --- 3. STREAMLIT UI ---
 st.title("📅 Study Schedule Optimizer (Evolutionary Algorithm)")
 st.write("Muat naik fail CSV anda untuk mengoptimumkan jadual tanpa clash.")
 
@@ -65,16 +54,12 @@ if uploaded_file:
     st.subheader("Data Asal (Input)")
     st.dataframe(df_origin, use_container_width=True)
 
-    # --- Time Parsing ---
     try:
-        # Map Day_Num to Day
         df_origin['Day'] = df_origin['Day_Num'].map({1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'})
 
-        # Create TimeSlot based on Start_Time and End_Time
         df_origin['Start_Hour'] = df_origin['Start_Time'].apply(parse_time)
         df_origin['End_Hour'] = df_origin['End_Time'].apply(parse_time)
         
-        # Create TimeSlot as a string: 'StartHour-EndHour'
         df_origin['TimeSlot'] = df_origin.apply(lambda row: f'{row["Start_Hour"]}-{row["End_Hour"]}', axis=1)
 
     except Exception as e:
@@ -98,7 +83,6 @@ if uploaded_file:
         best_fitness = 0
         fitness_progress = []  # Track fitness over generations
 
-        # Evolutionary Loop
         for gen in range(generations):
             # Evaluate fitness
             population = sorted(population, key=lambda x: calculate_fitness(x), reverse=True)
@@ -108,10 +92,8 @@ if uploaded_file:
                 best_fitness = current_best_fitness
                 best_schedule = population[0]
 
-            # Selection & Crossover (Simple version: Keep top 50%)
             next_gen = population[:pop_size // 2]
             
-            # Fill the rest with mutated versions of the best
             while len(next_gen) < pop_size:
                 parent = random.choice(next_gen)
                 child = mutate(parent, mutation_rate=mutation_rate)
@@ -119,15 +101,12 @@ if uploaded_file:
             
             population = next_gen
             
-            # Update UI
             progress = (gen + 1) / generations
             progress_bar.progress(progress)
             status_text.text(f"Generation {gen+1}/{generations} - Best Fitness: {best_fitness:.4f}")
             
-            # Track fitness progression
             fitness_progress.append(best_fitness)
 
-        # --- 4. RESULTS ---
         st.success("Optimasi Selesai!")
         
         col1, col2 = st.columns(2)
@@ -140,7 +119,6 @@ if uploaded_file:
         st.subheader("Jadual Yang Dioptimumkan")
         st.dataframe(best_schedule.sort_values(by=['Student_ID', 'Day']), use_container_width=True)
         
-        # --- Plot Fitness Progression Graph ---
         st.subheader("Fitness Progression over Generations")
         plt.plot(fitness_progress, label="Fitness")
         plt.xlabel('Generations')
@@ -149,6 +127,5 @@ if uploaded_file:
         plt.legend()
         st.pyplot(plt)
         
-        # Download Button
         csv = best_schedule.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Optimized Schedule", data=csv, file_name="optimized_schedule.csv", mime="text/csv")
