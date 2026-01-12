@@ -27,7 +27,6 @@ def mutate(df, mutation_rate=0.1):
     new_df = df.copy()
     for i in range(len(new_df)):
         if random.random() < mutation_rate:
-            # Mutate day and time slot
             new_df.at[i, 'Day'] = random.choice(list(day_mapping.values()))
             new_df.at[i, 'TimeSlot'] = random.choice(timeslots)
     return new_df
@@ -44,7 +43,7 @@ def parse_time(time_value):
         return None
 
 st.title("📅 Study Schedule Optimizer (Evolutionary Algorithm)")
-st.write("Muat naik fail CSV anda untuk mengoptimumkan jadual tanpa clash.")
+st.write("Upload your CSV file to optimize schedules without clashes")
 
 uploaded_file = st.file_uploader("Upload student_schedule.csv", type="csv")
 
@@ -64,7 +63,6 @@ if uploaded_file:
     except Exception as e:
         st.error(f"Error processing time columns: {e}")
 
-    # Parameter GA
     with st.sidebar:
         st.header("GA Parameters")
         pop_size = st.slider("Population Size", 10, 100, 50)
@@ -72,7 +70,6 @@ if uploaded_file:
         mutation_rate = st.slider("Mutation Rate", 0.01, 0.5, 0.1)
 
     if st.button("🚀 Run Optimization"):
-        # Initial Population (Copy of original with slight mutations)
         population = [mutate(df_origin, mutation_rate=0.5) for _ in range(pop_size)]
         
         progress_bar = st.progress(0)
@@ -83,7 +80,6 @@ if uploaded_file:
         fitness_progress = []  
 
         for gen in range(generations):
-            # Evaluate fitness
             population = sorted(population, key=lambda x: calculate_fitness(x), reverse=True)
             current_best_fitness = calculate_fitness(population[0])
             
@@ -106,7 +102,7 @@ if uploaded_file:
             
             fitness_progress.append(best_fitness)
 
-        st.success("Optimasi Selesai!")
+        st.success("Optimization done!")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -115,7 +111,7 @@ if uploaded_file:
             clash_count = (1/best_fitness) - 1
             st.metric("Total Clashes", int(clash_count))
 
-        st.subheader("Jadual Yang Dioptimumkan")
+        st.subheader("optimized schedule")
         st.dataframe(best_schedule.sort_values(by=['Student_ID', 'Day']), use_container_width=True)
         
         st.subheader("Fitness Progression over Generations")
