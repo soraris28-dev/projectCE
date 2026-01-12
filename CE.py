@@ -3,118 +3,89 @@ import pandas as pd
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
-st.set_page_config(page_title="University Schedule Optimizer (ABC)", layout="wide")
-
-def load_data(file):
-    return pd.read_csv(file)
+st.set_page_config(page_title="ABC Optimizer Lab", layout="wide")
 
 def calculate_fitness(schedule_df):
-    # Fitness = 1 / (1 + jumlah pertindihan)
+    # Mengira pertindihan (clashes)
     conflicts = schedule_df.groupby(['Student_ID', 'Day_Num', 'TimeSlot']).size()
     clashes = (conflicts > 1).sum()
     return 1 / (1 + clashes)
 
-def get_neighbor(df, mutation_rate=0.2):
-    # Lebah mencari sumber makanan berhampiran (Neighbor Search)
+def get_neighbor(df, rate):
     timeslots = ['08-10', '09-11', '10-12', '11-13', '14-16', '16-18']
-    day_mapping = {1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'}
-    
     new_df = df.copy()
     for i in range(len(new_df)):
-        if random.random() < mutation_rate:
-            new_df.at[i, 'Day_Num'] = random.choice(list(day_mapping.keys()))
+        if random.random() < rate:
+            new_df.at[i, 'Day_Num'] = random.randint(1, 5)
             new_df.at[i, 'TimeSlot'] = random.choice(timeslots)
     return new_df
 
-st.title("🐝 Study Schedule Optimizer (Artificial Bee Colony)")
-st.write("Menggunakan algoritma lebah untuk mencari jadual tanpa 'clash'.")
+def run_abc(df, pop_size, m_rate, iterations, limit):
+    # Inisialisasi
+    food_sources = [get_neighbor(df, 0.5) for _ in range(pop_size)]
+    fitness_values = [calculate_fitness(fs) for fs in food_sources]
+    trial_counters = [0] * pop_size
+    history = []
+    
+    for _ in range(iterations):
+        # Employed Bees
+        for i in range(pop_size):
+            candidate = get_neighbor(food_sources[i], m_rate)
+            fit = calculate_fitness(candidate)
+            if fit > fitness_values[i]:
+                food_sources[i], fitness_values[i], trial_counters[i] = candidate, fit, 0
+            else:
+                trial_counters[i] += 1
+        
+        # Scout Bees
+        for i in range(pop_size):
+            if trial_counters[i] > limit:
+                food_sources[i] = get_neighbor(df, 0.8)
+                fitness_values[i] = calculate_fitness(food_sources[i])
+                trial_counters[i] = 0
+        
+        history.append(max(fitness_values))
+    return history, max(fitness_values)
 
-uploaded_file = st.file_uploader("Upload student_schedule_cleaned.csv", type="csv")
+# --- UI STREAMLIT ---
+st.title("🐝 ABC Convergence Lab")
+st.markdown("Bandingkan prestasi algoritma berdasarkan **Population Size** & **Mutation Rate**.")
+
+uploaded_file = st.file_uploader("Upload Cleaned CSV", type="csv")
 
 if uploaded_file:
-    df_origin = load_data(uploaded_file)
+    df = pd.read_csv(uploaded_file)
+    if 'TimeSlot' not in df.columns:
+        df['TimeSlot'] = "08-10" # Default fallback
+
+    col1, col2 = st.columns(2)
     
-    # Pre-processing untuk TimeSlot jika belum ada
-    if 'TimeSlot' not in df_origin.columns:
-        df_origin['TimeSlot'] = df_origin.apply(lambda row: f"{int(row['Start_Time'])}-{int(row['End_Time'])}", axis=1)
+    with col1:
+        st.subheader("Konfigurasi A")
+        pop_a = st.slider("Pop Size (A)", 5, 50, 20)
+        rate_a = st.slider("Mutation Rate (A)", 0.01, 0.5, 0.1)
 
-    with st.sidebar:
-        st.header("ABC Parameters")
-        n_food_sources = st.slider("Number of Food Sources (Population)", 10, 100, 30)
-        max_iter = st.slider("Max Iterations", 10, 200, 50)
-        limit = st.slider("Abandonment Limit (Scout Bee Threshold)", 5, 50, 10)
+    with col2:
+        st.subheader("Konfigurasi B")
+        pop_b = st.slider("Pop Size (B)", 5, 50, 40)
+        rate_b = st.slider("Mutation Rate (B)", 0.01, 0.5, 0.3)
 
-    if st.button("🐝 Mulakan Pencarian Nektar"):
-        # 1. Initialization: Lebah mencari sumber makanan awal
-        food_sources = [get_neighbor(df_origin, mutation_rate=0.5) for _ in range(n_food_sources)]
-        fitness_values = [calculate_fitness(fs) for fs in food_sources]
-        trial_counters = [0] * n_food_sources # Untuk Scout Bee
-        
-        best_fitness = max(fitness_values)
-        best_schedule = food_sources[fitness_values.index(best_fitness)]
-        history = []
+    if st.button("🚀 Bandingkan Prestasi"):
+        with st.spinner("Sedang memproses perbandingan..."):
+            history_a, best_a = run_abc(df, pop_a, rate_a, 50, 10)
+            history_b, best_b = run_abc(df, pop_b, rate_b, 50, 10)
 
-        progress_bar = st.progress(0)
+            # Graf Perbandingan Convergence
+            st.subheader("📈 Graf Convergence (Penyatuan)")
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.plot(history_a, label=f"Set A (Pop:{pop_a}, Rate:{rate_a})", color='blue')
+            ax.plot(history_b, label=f"Set B (Pop:{pop_b}, Rate:{rate_b})", color='orange')
+            ax.set_xlabel("Generations")
+            ax.set_ylabel("Fitness Score")
+            ax.legend()
+            st.pyplot(fig)
 
-        for iteration in range(max_iter):
-            # --- PHASE 1: Employed Bees (Lebah Pekerja) ---
-            for i in range(n_food_sources):
-                new_source = get_neighbor(food_sources[i])
-                new_fit = calculate_fitness(new_source)
-                
-                if new_fit > fitness_values[i]:
-                    food_sources[i] = new_source
-                    fitness_values[i] = new_fit
-                    trial_counters[i] = 0
-                else:
-                    trial_counters[i] += 1
-
-            # --- PHASE 2: Onlooker Bees (Lebah Pemerhati) ---
-            # Memilih sumber makanan berdasarkan kualiti (Probability)
-            prob = [f/sum(fitness_values) for f in fitness_values]
-            for i in range(n_food_sources):
-                if random.random() < prob[i]:
-                    new_source = get_neighbor(food_sources[i])
-                    new_fit = calculate_fitness(new_source)
-                    if new_fit > fitness_values[i]:
-                        food_sources[i] = new_source
-                        fitness_values[i] = new_fit
-                        trial_counters[i] = 0
-                    else:
-                        trial_counters[i] += 1
-
-            # --- PHASE 3: Scout Bees (Lebah Pengakap) ---
-            # Jika sumber makanan tidak bertambah baik, cari yang baru secara rawak
-            for i in range(n_food_sources):
-                if trial_counters[i] > limit:
-                    food_sources[i] = get_neighbor(df_origin, mutation_rate=0.8)
-                    fitness_values[i] = calculate_fitness(food_sources[i])
-                    trial_counters[i] = 0
-
-            # Simpan rekod terbaik
-            current_max = max(fitness_values)
-            if current_max > best_fitness:
-                best_fitness = current_max
-                best_schedule = food_sources[fitness_values.index(best_fitness)]
-            
-            history.append(best_fitness)
-            progress_bar.progress((iteration + 1) / max_iter)
-
-        st.success("Selesai! Lebah telah menemui jadual terbaik.")
-        
-        # Paparan Result
-        c1, c2 = st.columns(2)
-        c1.metric("Kualiti Nektar (Fitness)", f"{best_fitness:.4f}")
-        c2.metric("Jumlah Clash", int((1/best_fitness)-1))
-
-        st.subheader("Jadual Optimum")
-        st.dataframe(best_schedule.sort_values(by=['Student_ID', 'Day_Num']), use_container_width=True)
-
-        # Graf
-        fig, ax = plt.subplots()
-        ax.plot(history, color='orange', linewidth=2)
-        ax.set_title("ABC Optimization Progress")
-        ax.set_xlabel("Iterations")
-        ax.set_ylabel("Best Fitness")
-        st.pyplot(fig)
+            # Rumusan Task
+            st.success(f"Analisis Selesai! Set {'B' if best_b > best_a else 'A'} menunjukkan prestasi lebih baik.")
